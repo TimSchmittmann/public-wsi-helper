@@ -4,23 +4,9 @@ import skimage.io
 import skimage.filters
 from filecache import filecache
 from pathlib import Path
-import re
-
-# import pickle
 import pandas as pd
 
-# @filecache(365 * 24 * 60 * 60)
-# def pickle_repo(pickle_file_path, backend_url, dataset_ids, segmentation_set_ids, annotator_ids, CELL_DIR, WSI_DIR):
-#     if pickle_file_path.exists():
-#         with open(pickle_file_path, "rb") as cache_file:
-#             return pickle.load(cache_file)
-#     else:
-#         data_repo = DataRepo(backend_url, dataset_ids, segmentation_set_ids, annotator_ids, CELL_DIR, WSI_DIR)
-#         with open(pickle_file_path, "wb") as cache_file:
-#             pickle.dump(data_repo, cache_file)
 
-
-@filecache(365 * 24 * 60 * 60)  #
 def build_cell_label_data(cell_dir, cell_data_by_id, selections_by_cell, labels_by_selection):
     data = []
     for cell_id, selections in selections_by_cell.items():
@@ -36,15 +22,17 @@ def build_cell_label_data(cell_dir, cell_data_by_id, selections_by_cell, labels_
                                 "wsi_id": cell_data_by_id[cell_id]["wsi"],
                             }
                         )
-                    # if cell_id not in data:
-                    #     data[cell_id] = {"imgPath": cell_dir / cell_data_by_id[cell_id]["imgName"], "labels": []}
-                    # data[cell_id]["labels"] += labels_by_selection[annotator_cell_label_selection["id"]]
         except Exception as e:
             print(e)
             continue
     return pd.DataFrame(data)
-    # df = pd.DataFrame(data).transpose()
-    # return df
+
+
+def build_unlabeled_cell_data(cell_dir, cell_data_by_id):
+    data = []
+    for cell_id, cell in cell_data_by_id.items():
+        data.append({"cell_id": cell_id, "img_path": str(cell_dir / cell["imgName"]), "wsi_id": cell["wsi"]})
+    return pd.DataFrame(data)
 
 
 @filecache(365 * 24 * 60 * 60)  #
@@ -62,8 +50,6 @@ def build_wsi_label_data(wsi_dir, wsi_data_by_id):
                 }
             )
     return pd.DataFrame(data)
-    # df = pd.DataFrame(data).transpose()
-    # return df
 
 
 @filecache(365 * 24 * 60 * 60)  #
@@ -79,13 +65,10 @@ def build_xy_data(cell_dir, cell_data_by_id, selections_by_cell, labels_by_selec
             )
             img_path = cell_dir / cell_data_by_id[annotator_cell_label_selection["cell"]]["imgName"]
             try:
-                # skimage.io.imread(CELL_DIR / f"{selection['cell']}.png")
-                # Label 1 = is Promyelocyte cell)
                 if target_label_id in labels_by_selection[annotator_cell_label_selection["id"]]:
                     data["x"].append(skimage.io.imread(img_path))
                     data["y"].append(1)
                     data["id"].append(annotator_cell_label_selection["cell"])
-                    # Label 7 means no special characteristic
                 else:
                     data["x"].append(skimage.io.imread(img_path))
                     data["y"].append(0)
@@ -161,6 +144,19 @@ def filter_valid_images(df):
     return df.loc[valid_indices]
 
 
+def cutout_cell_images(cell_df, wsi_df):
+    for idx, row in cell_df.iterrows():
+        if row["img_path"].exists():
+            continue
+        try:
+            wsi_path = str(wsi_df[wsi_df["id"] == row["wsi"]]["img_path"].values[0])
+            wsi = skimage.io.imread(wsi_path)
+            bb = row["bbox"]
+            skimage.io.imsave(row["img_path"], wsi[bb[0] : bb[2], bb[1] : bb[3]])
+        except Exception as e:
+            print(f"Error cutting {row['cell_id']}: {e}")
+
+
 @filecache(365 * 24 * 60 * 60)
 def retrieve_wsi_and_cell_data(backend_url, dataset_ids, segmentation_set_ids):
     cell_data = []
@@ -174,38 +170,6 @@ def retrieve_wsi_and_cell_data(backend_url, dataset_ids, segmentation_set_ids):
     return wsi_data, cell_data
 
 
-@filecache(365 * 24 * 60 * 60)
-def parse_wsi_labels(wsi):
-    if wsi["datasetId"] == 3:
-        return {"healthy"}
-    if wsi["datasetId"] == 2:
-        m = re.match(r"pat\d+-slide(?: |r|-)?\d+(?:(?:-|\.)([^-]+))?(?:-([a-z]+))?", wsi["imgName"])
-        if m:
-            if m.lastindex == 2:
-                return {"aml", m.group(1), m.group(2)}
-            if m.lastindex == 1:
-                return {"aml", m.group(1)}
-            return {"aml"}
-    if wsi["datasetId"] == 1:
-        matches = re.search("(\d+)-(AML|Napoleon)-Register-((\d+)-)?", wsi["imgName"], re.IGNORECASE)
-        if matches:
-            return {"aml", "m3"}
-            # rows.append({'Filepath': file_path, 'OriginalFilename': filename, 'PatientId': matches[1], 'Register': matches[2],
-            # 'Diagnosis': 'AML', 'SlideId': matches[4], 'Magnification': matches[5], 'Subtype': 'M3'})
-        matches = re.search("(.+)-AIDA-?2000-?(\d+)", wsi["imgName"], re.IGNORECASE)
-        if matches:
-            return {"aml", "m3"}
-            # rows.append({'Filepath': file_path, 'OriginalFilename': filename, 'PatientId': matches[1], 'Register': 'AIDA2000',
-            # 'Diagnosis': 'AML', 'SlideId': matches[2], 'Magnification': matches[3], 'Subtype': 'M3'})
-        matches = re.search("Pat(\d+)(?:-|_)(?:Slide ?)?(\d+)(?:-|\.)((M\d|not_?classified)-)?", wsi["imgName"], re.IGNORECASE)
-        if matches:
-            return {"aml", "not_classified" if matches[3] == None or matches[4] == "notclassified" else matches[4]}
-            # rows.append({'Filepath': file_path, 'OriginalFilename': filename, 'PatientId': matches[1],
-            # 'Diagnosis': 'AML', 'SlideId': matches[2], 'Magnification': matches[5],
-            # 'Subtype': 'not_classified' if matches[3] == None  or matches[4] == 'notclassified' else matches[4]})
-    raise ValueError(f'Invalid wsi name: {wsi["imgName"]}, dataset: {wsi["datasetId"]}')
-
-
 class DataRepo(object):
     def __init__(
         self, backend_url, dataset_ids, segmentation_set_ids, annotator_ids, cell_dir, wsi_dir, skip_image_download=False
@@ -216,7 +180,6 @@ class DataRepo(object):
         self.annotator_ids = annotator_ids
         self.cell_dir = cell_dir
         self.wsi_dir = wsi_dir
-        self.pixel_diameter_in_micrometer = 0
         self.wsi_data_by_id = {}
         self.cell_data_by_id = {}
         self.labels_by_id = {}
@@ -227,7 +190,6 @@ class DataRepo(object):
     #
     def download_image_data(self, data, target_dir):
         for obj in data:
-            # response = requests.get(f"http://schmittmann.me:8084/api/cell/{selection['cell']}")
             obj_image = Path(target_dir) / f"{obj['imgName']}"
             if obj_image.is_file():
                 continue
@@ -275,6 +237,9 @@ class DataRepo(object):
             self.labels_by_id,
             target_label_id,
         )
+
+    def build_unlabeled_cell_data(self):
+        return build_unlabeled_cell_data(self.cell_dir, self.cell_data_by_id)
 
     def build_cell_label_data(self):
         return build_cell_label_data(self.cell_dir, self.cell_data_by_id, self.selections_by_cell, self.labels_by_selection)
