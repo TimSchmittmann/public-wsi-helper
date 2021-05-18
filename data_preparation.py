@@ -230,7 +230,7 @@ class DataRepo(object):
     def download_image_data(self, data, target_dir):
         for obj in data:
             obj_image = Path(target_dir) / f"{obj['imgName']}"
-            if obj_image.is_file():
+            if obj_image.is_file() or obj["ressourceUrl"] is None:
                 continue
             response = requests.get(obj["ressourceUrl"], verify=False)
             with open(obj_image, "wb") as out_file:
@@ -239,6 +239,8 @@ class DataRepo(object):
 
     def preload(self, skip_image_download=False):
         wsi_data, cell_data = retrieve_wsi_and_cell_data(self.backend_url, self.dataset_ids, self.segmentation_set_ids)
+        print(wsi_data)
+        print(cell_data)
         if not skip_image_download:
             self.download_image_data(wsi_data, self.wsi_dir)
             self.download_image_data(cell_data, self.cell_dir)
