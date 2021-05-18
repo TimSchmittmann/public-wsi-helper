@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 import re
 
+
 def build_cell_label_data(cell_dir, cell_data_by_id, selections_by_cell, labels_by_selection):
     data = []
     for cell_id, selections in selections_by_cell.items():
@@ -164,10 +165,16 @@ def retrieve_wsi_and_cell_data(backend_url, dataset_ids, segmentation_set_ids):
     for dataset_id in dataset_ids:
         wsi_data += retrieve_wsi_data(f"{backend_url}/api/wsi/", dataset_id)
     for wsi in wsi_data:
-        wsi["label"] = parse_wsi_labels(wsi)
+        wsi["label"] = set(wsi_label_fix(l) for l in parse_wsi_labels(wsi))
         for segmentation_set_id in segmentation_set_ids:
             cell_data += retrieve_cell_data(f"{backend_url}/api/wsi_cells/{wsi['id']}/{segmentation_set_id}")
     return wsi_data, cell_data
+
+
+def wsi_label_fix(l):
+    if l == "50x.png" or l == "al" or l == "ap" or l == "bal" or l == "m445501":
+        return None
+    return "m4" if "m4" in l else "m5" if "m5" in l else "not_classified" if l == "notclassified" else l.lower()
 
 
 @filecache(365 * 24 * 60 * 60)
