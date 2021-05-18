@@ -5,7 +5,7 @@ import skimage.filters
 from filecache import filecache
 from pathlib import Path
 import pandas as pd
-
+import re
 
 def build_cell_label_data(cell_dir, cell_data_by_id, selections_by_cell, labels_by_selection):
     data = []
@@ -168,6 +168,38 @@ def retrieve_wsi_and_cell_data(backend_url, dataset_ids, segmentation_set_ids):
         for segmentation_set_id in segmentation_set_ids:
             cell_data += retrieve_cell_data(f"{backend_url}/api/wsi_cells/{wsi['id']}/{segmentation_set_id}")
     return wsi_data, cell_data
+
+
+@filecache(365 * 24 * 60 * 60)
+def parse_wsi_labels(wsi):
+    if wsi["datasetId"] == 3:
+        return {"healthy"}
+    if wsi["datasetId"] == 2:
+        m = re.match(r"pat\d+-slide(?: |r|-)?\d+(?:(?:-|\.)([^-]+))?(?:-([a-z]+))?", wsi["imgName"])
+        if m:
+            if m.lastindex == 2:
+                return {"aml", m.group(1), m.group(2)}
+            if m.lastindex == 1:
+                return {"aml", m.group(1)}
+            return {"aml"}
+    if wsi["datasetId"] == 1:
+        matches = re.search("(\d+)-(AML|Napoleon)-Register-((\d+)-)?", wsi["imgName"], re.IGNORECASE)
+        if matches:
+            return {"aml", "m3"}
+            # rows.append({'Filepath': file_path, 'OriginalFilename': filename, 'PatientId': matches[1], 'Register': matches[2],
+            # 'Diagnosis': 'AML', 'SlideId': matches[4], 'Magnification': matches[5], 'Subtype': 'M3'})
+        matches = re.search("(.+)-AIDA-?2000-?(\d+)", wsi["imgName"], re.IGNORECASE)
+        if matches:
+            return {"aml", "m3"}
+            # rows.append({'Filepath': file_path, 'OriginalFilename': filename, 'PatientId': matches[1], 'Register': 'AIDA2000',
+            # 'Diagnosis': 'AML', 'SlideId': matches[2], 'Magnification': matches[3], 'Subtype': 'M3'})
+        matches = re.search("Pat(\d+)(?:-|_)(?:Slide ?)?(\d+)(?:-|\.)((M\d|not_?classified)-)?", wsi["imgName"], re.IGNORECASE)
+        if matches:
+            return {"aml", "not_classified" if matches[3] == None or matches[4] == "notclassified" else matches[4]}
+            # rows.append({'Filepath': file_path, 'OriginalFilename': filename, 'PatientId': matches[1],
+            # 'Diagnosis': 'AML', 'SlideId': matches[2], 'Magnification': matches[5],
+            # 'Subtype': 'not_classified' if matches[3] == None  or matches[4] == 'notclassified' else matches[4]})
+    raise ValueError(f'Invalid wsi name: {wsi["imgName"]}, dataset: {wsi["datasetId"]}')
 
 
 class DataRepo(object):
