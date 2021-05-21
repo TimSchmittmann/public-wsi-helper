@@ -6,6 +6,8 @@ env = Env()
 env.read_env()
 CELL_DIR = Path(env("IO_DATA_DIR")) / "cell_images"
 WSI_DIR = Path(env("IO_DATA_DIR")) / "wsi_images"
+CELL_DIR.mkdir(exists_ok=True, parents=True)
+WSI_DIR.mkdir(exists_ok=True, parents=True)
 """
 Dataset ids correspond to
 1: APL Classification with 50 APL and 50 Non-APL WSI images
