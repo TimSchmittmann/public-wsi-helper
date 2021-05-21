@@ -239,8 +239,8 @@ class DataRepo(object):
 
     def preload(self, skip_image_download=False):
         wsi_data, cell_data = retrieve_wsi_and_cell_data(self.backend_url, self.dataset_ids, self.segmentation_set_ids)
-        print(wsi_data)
-        print(cell_data)
+        # print(wsi_data)
+        # print(cell_data)
         if not skip_image_download:
             self.download_image_data(wsi_data, self.wsi_dir)
             self.download_image_data(cell_data, self.cell_dir)

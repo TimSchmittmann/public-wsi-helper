@@ -57,3 +57,6 @@ cutout_cell_images(cell_df, wsi_df)
 # Transform dataframes into sparse matrix format
 cell_df = multilabel_columns_to_sparse_df(cell_df, cell_multilabel_columns)
 wsi_df = multilabel_columns_to_sparse_df(wsi_df, wsi_multilabel_columns)
+
+cell_df.to_csv(str(DATA_DIR / "cell_df.csv"))
+wsi_df.to_csv(str(DATA_DIR / "wsi_df.csv"))

@@ -4,10 +4,11 @@ from pathlib import Path
 
 env = Env()
 env.read_env()
-CELL_DIR = Path(env("IO_DATA_DIR")) / "cell_images"
-WSI_DIR = Path(env("IO_DATA_DIR")) / "wsi_images"
-CELL_DIR.mkdir(exists_ok=True, parents=True)
-WSI_DIR.mkdir(exists_ok=True, parents=True)
+DATA_DIR = Path(env("IO_DATA_DIR"))
+CELL_DIR = DATA_DIR / "cell_images"
+WSI_DIR = DATA_DIR / "wsi_images"
+CELL_DIR.mkdir(exist_ok=True, parents=True)
+WSI_DIR.mkdir(exist_ok=True, parents=True)
 """
 Dataset ids correspond to
 1: APL Classification with 50 APL and 50 Non-APL WSI images
@@ -54,3 +55,7 @@ wsi_df = filter_valid_images(wsi_df)
 # Combine dfs to get all cells labeled as promyelocyte/other (combined_df.y_cell == 1 or 0)
 # with their wsi images labeled as m3/other (combined_df.y_wsi == 1 or 0)
 combined_df = cell_df.join(wsi_df.set_index("wsi_id"), on="wsi_id", lsuffix="_cell", rsuffix="_wsi")
+
+cell_df.to_csv(str(DATA_DIR / "cell_df.csv"))
+wsi_df.to_csv(str(DATA_DIR / "wsi_df.csv"))
+combined_df.to_csv(str(DATA_DIR / "combined_df.csv"))
